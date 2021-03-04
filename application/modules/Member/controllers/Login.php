@@ -6,7 +6,7 @@
  * Date:20180528
  */
 
-class LoginController extends PcBasicController
+class LoginController extends MemberBasicController
 {
 	private $m_user;
 	private $m_user_login_logs;
@@ -40,7 +40,7 @@ class LoginController extends PcBasicController
 			$data = array('code' => 1000, 'msg' => '本系统关闭登录功能');
 			Helper::response($data);
 		}
-		$email    = $this->getPost('email');
+		$email    = $this->getPost('email',false);
 		$password = $this->getPost('password');
 		
 		$password_string = new \Safe\MyString($password);
@@ -50,6 +50,7 @@ class LoginController extends PcBasicController
 		
 		if($email AND $password AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
+				$email = strtolower($email);
 				if(isEmail($email)){
 					if(isset($this->config['yzmswitch']) AND $this->config['yzmswitch']>0){
 						$vercode = $this->getPost('vercode');

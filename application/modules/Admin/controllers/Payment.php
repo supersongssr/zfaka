@@ -90,6 +90,10 @@ class PaymentController extends AdminBasicController
     }
 	public function editajaxAction()
 	{
+        if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
+            $data = array('code' => 1000, 'msg' => '请登录');
+			Helper::response($data);
+        }
 		$method = $this->getPost('method',false);
 		$id = $this->getPost('id',false);
 		$payname = $this->getPost('payname',false);
@@ -100,17 +104,12 @@ class PaymentController extends AdminBasicController
 		$ali_public_key = $this->getPost('ali_public_key',false);
 		$rsa_private_key = $this->getPost('rsa_private_key',false);
 		$configure3 = $this->getPost('configure3',false);
+		$configure4 = $this->getPost('configure4',false);
 		$active = $this->getPost('active',false);
 		$overtime = $this->getPost('overtime',false);
 		$csrf_token = $this->getPost('csrf_token', false);
 		
 		$data = array();
-		
-        if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
-            $data = array('code' => 1000, 'msg' => '请登录');
-			Helper::response($data);
-        }
-		
 		
 		if($method AND $payname AND is_numeric($active) AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
@@ -139,6 +138,9 @@ class PaymentController extends AdminBasicController
 				}
 				if(isset($configure3) AND strlen($configure3)>0){
 					$m['configure3']=$configure3;
+				}
+				if(isset($configure4) AND strlen($configure4)>0){
+					$m['configure4']=$configure4;
 				}
 				if(isset($overtime) AND is_numeric($overtime)){
 					$m['overtime']=$overtime;

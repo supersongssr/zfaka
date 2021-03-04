@@ -187,6 +187,10 @@ class ProductsController extends AdminBasicController
     }
 	public function editajaxAction()
 	{
+        if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
+            $data = array('code' => 1000, 'msg' => '请登录');
+			Helper::response($data);
+        }
 		$method = $this->getPost('method',false);
 		$id = $this->getPost('id',false);
 		$typeid = $this->getPost('typeid',false);
@@ -194,8 +198,12 @@ class ProductsController extends AdminBasicController
 		$password = $this->getPost('password',false);
 		$description = $this->getPost('description',false);
 		$stockcontrol = $this->getPost('stockcontrol',false);
-		$qty = $this->getPost('qty',false);
-		$price = $this->getPost('price',false);
+		$qty = $this->getPost('qty');
+		$qty_switch = $this->getPost('qty_switch');
+		$qty_virtual = $this->getPost('qty_virtual');
+		$qty_sell = $this->getPost('qty_sell');
+		$price = $this->getPost('price');
+		$price_ori = $this->getPost('price_ori');
 		$auto = $this->getPost('auto',false);
 		$addons = $this->getPost('addons',false);
 		$active = $this->getPost('active',false);
@@ -203,11 +211,6 @@ class ProductsController extends AdminBasicController
 		$csrf_token = $this->getPost('csrf_token', false);
 		
 		$data = array();
-		
-        if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
-            $data = array('code' => 1000, 'msg' => '请登录');
-			Helper::response($data);
-        }
 		
 		if($method AND $typeid AND $name AND $description AND is_numeric($stockcontrol) AND is_numeric($qty) AND is_numeric($price) AND is_numeric($auto) AND is_numeric($active) AND is_numeric($sort_num) AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
@@ -217,14 +220,18 @@ class ProductsController extends AdminBasicController
 				}
 				
 				$description = str_replace(array("\r","\n","\t"), "", $description);
-				$m=array(
+				$m = array(
 					'typeid'=>$typeid,
 					'name'=>$name,
 					'password'=>$password,
 					'description'=>htmlspecialchars($description),
 					'stockcontrol'=>$stockcontrol,
 					'qty'=>$qty,
+					'qty_switch'=>$qty_switch,
+					'qty_virtual'=>$qty_virtual,
+					'qty_sell'=>$qty_sell,
 					'price'=>$price,
+					'price_ori'=>$price_ori,
 					'auto'=>$auto,
 					'addons'=>$addons,
 					'active'=>$active,
@@ -252,6 +259,7 @@ class ProductsController extends AdminBasicController
 						$m['qty'] = 0;
 					}
 					$m['addtime'] = time();
+					$m['imgurl'] = "";
 					$u = $this->m_products->Insert($m);
 					if($u){
 						$data = array('code' => 1, 'msg' => '新增成功');
@@ -272,15 +280,14 @@ class ProductsController extends AdminBasicController
 	
 	public function updateqtyajaxAction()
 	{
-		$pid = $this->getPost('pid',false);
-		$csrf_token = $this->getPost('csrf_token', false);
-		
-		$data = array();
-		
         if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
             $data = array('code' => 1000, 'msg' => '请登录');
 			Helper::response($data);
         }
+		$pid = $this->getPost('pid',false);
+		$csrf_token = $this->getPost('csrf_token', false);
+		
+		$data = array();
 		
 		if($pid AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
@@ -336,6 +343,10 @@ class ProductsController extends AdminBasicController
 	
     public function getlistbytidAction()
     {
+        if ($this->AdminUser==FALSE AND empty($this->AdminUser)) {
+            $data = array('code' => 1000, 'msg' => '请登录');
+			Helper::response($data);
+        }
 		$tid = $this->getPost('tid');
 		$csrf_token = $this->getPost('csrf_token', false);
 		

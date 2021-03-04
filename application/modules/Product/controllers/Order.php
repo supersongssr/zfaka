@@ -5,7 +5,7 @@
  * Date:20180509
  */
 
-class OrderController extends PcBasicController
+class OrderController extends ProductBasicController
 {
 	private $m_products;
 	private $m_order;
@@ -32,20 +32,32 @@ class OrderController extends PcBasicController
 		$addons = $this->getPost('addons');
 		$csrf_token = $this->getPost('csrf_token', false);
 		
-		$chapwd_string = new \Safe\MyString($chapwd);
-		$chapwd = $chapwd_string->trimall()->qufuhao2()->getValue();
-		
-		
-		if(is_numeric($pid) AND $pid>0 AND is_numeric($number) AND $number>0  AND $chapwd AND $csrf_token){
+		if(is_numeric($pid) AND $pid>0 AND is_numeric($number) AND $number>0 AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
+				
+				if(isset($this->config['querycontactswitch']) AND $this->config['querycontactswitch']>0){
+					if($chapwd AND strlen($chapwd)>0){
+						$chapwd_string = new \Safe\MyString($chapwd);
+						$chapwd = $chapwd_string->trimall()->qufuhao2()->getValue();	
+					}else{
+						$data = array('code' => 1006, 'msg' => '丢失参数');
+						Helper::response($data);
+					}
+				}
+				
 				if(isset($this->config['orderinputtype']) AND $this->config['orderinputtype']=='2'){
 					if($this->login AND $this->userid){
 						$email = $this->uinfo['email'];
 						$qq = '';
 					}else{
 						$qq = $this->getPost('qq');
-						if($qq AND is_numeric($qq)){
-							$email = $qq.'@qq.com';
+						if($qq){
+							if(is_numeric($qq)){
+								$email = $qq.'@qq.com';
+							}else{
+								$data = array('code' => 1006, 'msg' => 'QQ格式不正确');
+								Helper::response($data);	
+							}
 						}else{
 							$data = array('code' => 1006, 'msg' => '丢失参数');
 							Helper::response($data);
@@ -53,8 +65,14 @@ class OrderController extends PcBasicController
 					}
 				}else{
 					$email = $this->getPost('email',false);
-					if($email AND isEmail($email)){
-						$qq = '';
+					if($email){
+						$email = strtolower($email);
+						if(isEmail($email)){
+							$qq = '';
+						}else{
+							$data = array('code' => 1006, 'msg' => '邮箱格式不正确');
+							Helper::response($data);
+						}
 					}else{
 						$data = array('code' => 1006, 'msg' => '丢失参数');
 						Helper::response($data);
@@ -164,11 +182,11 @@ class OrderController extends PcBasicController
 						'addons'=>$o_addons,
 						'addtime'=>time(),
 					);
-					$id=$this->m_order->Insert($m);
+					$id = $this->m_order->Insert($m);
 					if($id>0){
-						$oid = base64_encode($id);
+						$oid = base64_encode($orderid);
 						//设置orderidSESSION
-						$this->setSession('order_id',$id);
+						$this->setSession('order_id',$orderid);
 						$this->setSession('order_email',$email);
 						$data = array('code' => 1, 'msg' => '下单成功','data'=>array('oid'=>$oid));	
 					}else{
@@ -190,41 +208,39 @@ class OrderController extends PcBasicController
 	{
 		$data = array();
 		$oid = $this->get('oid',false);
-		$ooid = $this->get('ooid',false);
-		$id = 0;
-		if($oid OR $ooid){
-			if($oid){
-				$oid = (int)base64_decode($oid);
-				if(is_numeric($oid) AND $oid>0){
-					$id = $oid;
-				}
-			}else{
-				if(is_numeric($ooid) AND $ooid>0){
-					$id = $ooid;
-				}
-			}
-			
-			$order_id = $this->getSession('order_id');
-			if($order_id AND is_numeric($order_id) AND $order_id>0 AND $order_id ==$id ){
-				if(is_numeric($id) AND $id>0){
-					$order = $this->m_order->Where(array('id'=>$id,'isdelete'=>0))->SelectOne();
+		if($oid AND strlen($oid)>0){
+			$oid = base64_decode($oid);
+			if($oid AND strlen($oid)>0){
+				$order_id = $this->getSession('order_id');
+				if($order_id AND strlen($order_id)>0 AND $order_id ==$oid ){
+					$orderid_string = new \Safe\MyString($oid);
+					$oid = $orderid_string->trimall()->qufuhao2()->getValue();
+					//20190115 针对需要支付的订单,进行时间查询限制,最多1天前
+					$starttime = strtotime("-1 day");
+					$where = "addtime>{$starttime}";
+					$order = $this->m_order->Where($where)->Where(array('orderid'=>$oid,'isdelete'=>0))->SelectOne();
 					if(!empty($order)){
-						//获取支付方式
-						$payments = $this->m_payment->getConfig();
-						$data['order']=$order;
-						$data['payments']=$payments;
-						$data['code']=1;
+						if($order['status']>0){
+							$data['code']=1003;
+							$data['msg']='订单已支付';
+						}else{
+							//获取支付方式
+							$payments = $this->m_payment->getConfig();
+							$data['order'] = $order;
+							$data['payments'] = $payments;
+							$data['code']=1;
+						}
 					}else{
 						$data['code']=1002;
-						$data['msg']='订单不存在';
+						$data['msg']='订单不存在(最近1天)';
 					}
 				}else{
-					$data['code']=1001;
-					$data['msg']='订单不存在';
+					$data['code']=1003;
+					$data['msg']='拒绝查询';
 				}
 			}else{
-				$data['code']=1003;
-				$data['msg']='拒绝查询';
+				$data['code']=1001;
+				$data['msg']='订单不存在';
 			}
 		}else{
 			$data['code']=1001;
@@ -239,60 +255,51 @@ class OrderController extends PcBasicController
 		$paymethod = $this->getPost('paymethod');
 		$oid = $this->getPost('oid');
 		$csrf_token = $this->getPost('csrf_token');
-		if($paymethod AND $oid AND is_numeric($oid) AND $oid>0 AND $csrf_token){
-			$payments = $this->m_payment->getConfig();
-			if(isset($payments[$paymethod]) AND !empty($payments[$paymethod])){
-				$payconfig = $payments[$paymethod];
-				if($payconfig['active']>0){
-					//获取订单信息
-					$order = $this->m_order->Where(array('id'=>$oid,'isdelete'=>0))->SelectOne();
-					if(is_array($order) AND !empty($order)){
-						if($order['status']>0){
-							$data = array('code' => 1004, 'msg' => '订单已支付成功');
-						}else{
-							try{
-								//这里对有订单超时处理的支付渠道进行特别处理
-								/*if($payconfig['overtime']>0){
-									if(($order['addtime']+$payconfig['overtime'])<time()){
-										//需要重新生成订单再提交
-										//生成orderid
-										$prefix = isset($this->config['orderprefix'])?$this->config['orderprefix']:'zlkb';
-										$new_orderid = $prefix. date('Y') . date('m') . date('d') . date('H') . date('i') . date('s') . mt_rand(10000, 99999);
-										$u = $this->m_order->UpdateByID(array('orderid'=>$new_orderid),$oid);
-										if($u){
-											$orderid = $new_orderid;
-										}else{
-											$data = array('code' => 1006, 'msg' =>"订单超时关闭");
-											Helper::response($data);
-										}
-									}else{
-										$orderid = $order['orderid'];
-									}
-								}else{
+		if($paymethod AND $oid AND strlen($oid)>0 AND $csrf_token){
+			$oid = base64_decode($oid);
+			if($oid AND strlen($oid)>0){
+				$orderid_string = new \Safe\MyString($oid);
+				$oid = $orderid_string->trimall()->qufuhao2()->getValue();
+				
+				$payments = $this->m_payment->getConfig();
+				if(isset($payments[$paymethod]) AND !empty($payments[$paymethod])){
+					$payconfig = $payments[$paymethod];
+					if($payconfig['active']>0){
+						//获取订单信息
+						//20190115 针对需要支付的订单,进行时间查询限制,最多1天前
+						$starttime = strtotime("-1 day");
+						$where = "addtime>{$starttime}";
+						$order = $this->m_order->Where($where)->Where(array('orderid'=>$oid,'isdelete'=>0))->SelectOne();
+						if(is_array($order) AND !empty($order)){
+							if($order['status']>0){
+								$data = array('code' => 1004, 'msg' => '订单已支付成功');
+							}else{
+								try{
 									$orderid = $order['orderid'];
-								}*/
-								$orderid = $order['orderid'];
-								if($this->config['paysubjectswitch']>0){
-									$productname = $order['orderid'];
-								}else{
-									$productname = $order['productname'];
+									if($this->config['paysubjectswitch']>0){
+										$productname = $order['orderid'];
+									}else{
+										$productname = $order['productname'];
+									}
+									$payclass = "\\Pay\\".$paymethod."\\".$paymethod;
+									$PAY = new $payclass();
+									$params =array('pid'=>$order['pid'],'orderid'=>$orderid,'money'=>$order['money'],'productname'=>$productname,'webname'=>$this->config['webname'],'weburl'=>$this->config['weburl'],'qrserver'=>$this->config['qrserver']);
+									$data = $PAY->pay($payconfig,$params);
+								} catch (\Exception $e) {
+									$data = array('code' => 1005, 'msg' => $e->getMessage());
 								}
-								$payclass = "\\Pay\\".$paymethod."\\".$paymethod;
-								$PAY = new $payclass();
-								$params =array('pid'=>$order['pid'],'orderid'=>$orderid,'money'=>$order['money'],'productname'=>$productname,'weburl'=>$this->config['weburl'],'qrserver'=>$this->config['qrserver']);
-								$data = $PAY->pay($payconfig,$params);
-							} catch (\Exception $e) {
-								$data = array('code' => 1005, 'msg' => $e->getMessage());
 							}
+						}else{
+							$data = array('code' => 1003, 'msg' => '订单不存在(最近1天)');
 						}
 					}else{
-						$data = array('code' => 1003, 'msg' => '订单不存在');
+						$data = array('code' => 1002, 'msg' => '支付渠道已关闭');
 					}
 				}else{
-					$data = array('code' => 1002, 'msg' => '支付渠道已关闭');
+					$data = array('code' => 1001, 'msg' => '支付渠道异常');
 				}
 			}else{
-				$data = array('code' => 1001, 'msg' => '支付渠道异常');
+				$data = array('code' => 1000, 'msg' => '丢失参数');
 			}
 		}else{
 			$data = array('code' => 1000, 'msg' => '丢失参数');
@@ -335,12 +342,17 @@ class OrderController extends PcBasicController
 		$paymethod = $this->get('paymethod');
 		$orderid = $this->get('orderid');
 		if($paymethod AND $orderid AND strlen($orderid)>0){
+			$orderid_string = new \Safe\MyString($orderid);
+			$orderid = $orderid_string->trimall()->qufuhao2()->getValue();
 			$payments = $this->m_payment->getConfig();
 			if(isset($payments[$paymethod]) AND !empty($payments[$paymethod])){
 				$payconfig = $payments[$paymethod];
 				if($payconfig['active']>0){
 					//获取订单信息
-					$order = $this->m_order->Where(array('orderid'=>$orderid,'isdelete'=>0))->SelectOne();
+					//20190115 针对需要支付的订单,进行时间查询限制,最多1天前
+					$starttime = strtotime("-1 day");
+					$where = "addtime>{$starttime}";
+					$order = $this->m_order->Where($where)->Where(array('orderid'=>$orderid,'isdelete'=>0))->SelectOne();
 					if(is_array($order) AND !empty($order)){
 						if($order['status']>0){
 							$msg = '订单已支付成功';
@@ -348,14 +360,14 @@ class OrderController extends PcBasicController
 							try{
 								$payclass = "\\Pay\\".$paymethod."\\".$paymethod;
 								$PAY = new $payclass();
-								$params =array('orderid'=>$orderid,'money'=>$order['money'],'productname'=>$order['productname'],'weburl'=>$this->config['weburl']);
+								$params =array('orderid'=>$orderid,'money'=>$order['money'],'productname'=>$order['productname'],'weburl'=>$this->config['weburl'],'order'=>$order);
 								$msg = $PAY->jump($payconfig,$params);
 							} catch (\Exception $e) {
 								$msg = $e->getMessage();
 							}
 						}
 					}else{
-						$msg = '订单不存在';
+						$msg = '订单不存在(最近1天)';
 					}
 				}else{
 					$msg = '支付渠道已关闭';

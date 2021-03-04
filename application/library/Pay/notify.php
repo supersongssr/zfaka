@@ -73,11 +73,13 @@ class notify
 										//3.1.2.1 直接进行密码与订单的关联
 										$m_products_card->Where("id in ({$card_id_str})")->Where(array('active'=>0))->Update(array('active'=>1));
 										//3.1.2.2 然后进行库存清减
-										$qty_m = array('qty' => 'qty-'.$order['number']);
+										$qty_m = array('qty' => 'qty-'.$order['number'],'qty_virtual' => 'qty_virtual-'.$order['number'],'qty_sell'=>'qty_sell+'.$order['number']);
 										$m_products->Where(array('id'=>$order['pid'],'stockcontrol'=>1))->Update($qty_m,TRUE);
 										$kucunNotic=";当前商品库存剩余:".($product['qty']-$order['number']);
 									}else{
 										//3.1.2.3不进行库存控制时,自动发货商品是不需要减库存，也不需要取消密码；因为这种情况下的密码是通用的；
+										$qty_m = array('qty_sell'=>'qty_sell+'.$order['number']);
+										$m_products->Where(array('id'=>$order['pid'],'stockcontrol'=>0))->Update($qty_m,TRUE);
 										$kucunNotic="";
 									}
 									//3.1.3 更新订单状态,同时把密码写到订单中
@@ -85,9 +87,11 @@ class notify
 									//3.1.4 把邮件通知写到消息队列中，然后用定时任务去执行即可
 									$m = array();
 									//3.1.4.1通知用户,定时任务去执行
-									if(isEmail($order['email'])){
-										$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],密码是:'.$card_mi_str;
-										$m[]=array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+									if(isset($web_config['emailswitch']) AND $web_config['emailswitch']>0){
+										if(isEmail($order['email'])){
+											$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],密码是:'.$card_mi_str;
+											$m[]=array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+										}	
 									}
 									//3.1.4.2通知管理员,定时任务去执行
 									if(isEmail($web_config['adminemail'])){
@@ -97,6 +101,10 @@ class notify
 									
 									if(!empty($m)){
 										$m_email_queue->MultiInsert($m);
+										if($web_config['emailsendtypeswitch']>0){
+											$send_email = new \Sendemail();
+											$send_email->send($m);
+										}
 									}
 									$data =array('code'=>1,'msg'=>'自动发卡');
 								}else{
@@ -106,9 +114,11 @@ class notify
 									//3.2.3邮件通知写到消息队列中，然后用定时任务去执行即可
 									$m = array();
 									//3.2.3.1通知用户,定时任务去执行
-									if(isEmail($order['email'])){
-										$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],由于库存不足暂时无法处理,管理员正在拼命处理中....请耐心等待!';
-										$m[] = array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+									if(isset($web_config['emailswitch']) AND $web_config['emailswitch']>0){
+										if(isEmail($order['email'])){
+											$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],由于库存不足暂时无法处理,管理员正在拼命处理中....请耐心等待!';
+											$m[] = array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+										}
 									}
 									//3.2.3.2通知管理员,定时任务去执行
 									if(isEmail($web_config['adminemail'])){
@@ -118,6 +128,10 @@ class notify
 									
 									if(!empty($m)){
 										$m_email_queue->MultiInsert($m);
+										if($web_config['emailsendtypeswitch']>0){
+											$send_email = new \Sendemail();
+											$send_email->send($m);
+										}
 									}
 									$data =array('code'=>1,'msg'=>'库存不足,无法处理');
 								}
@@ -125,15 +139,20 @@ class notify
 								//4.手工操作
 								//4.1如果商品有进行库存控制，就减库存
 								if($product['stockcontrol']>0){
-									$qty_m = array('qty' => 'qty-'.$order['number']);
+									$qty_m = array('qty' => 'qty-'.$order['number'],'qty_virtual' => 'qty_virtual-'.$order['number'],'qty_sell'=>'qty_sell+'.$order['number']);
 									$m_products->Where(array('id'=>$order['pid'],'stockcontrol'=>1))->Update($qty_m,TRUE);
+								}else{
+									$qty_m = array('qty_sell'=>'qty_sell+'.$order['number']);
+									$m_products->Where(array('id'=>$order['pid'],'stockcontrol'=>0))->Update($qty_m,TRUE);
 								}
 								//4.2邮件通知写到消息队列中，然后用定时任务去执行即可
 								$m = array();
 								//4.2.1通知用户,定时任务去执行
-								if(isEmail($order['email'])){
-									$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],属于手工发货类型，管理员即将联系您....请耐心等待!';
-									$m[] = array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+								if(isset($web_config['emailswitch']) AND $web_config['emailswitch']>0){
+									if(isEmail($order['email'])){
+										$content = '用户:' . $order['email'] . ',购买的商品['.$order['productname'].'],属于手工发货类型，管理员即将联系您....请耐心等待!';
+										$m[] = array('email'=>$order['email'],'subject'=>'商品购买成功','content'=>$content,'addtime'=>time(),'status'=>0);
+									}
 								}
 								//4.2.2通知管理员,定时任务去执行
 								if(isEmail($web_config['adminemail'])){
@@ -145,6 +164,10 @@ class notify
 								}
 								if(!empty($m)){
 									$m_email_queue->MultiInsert($m);
+									if($web_config['emailsendtypeswitch']>0){
+										$send_email = new \Sendemail();
+										$send_email->send($m);
+									}
 								}
 								$data =array('code'=>1,'msg'=>'手工订单');
 							}
@@ -157,10 +180,9 @@ class notify
 				$data =array('code'=>1003,'msg'=>'订单号不存在');
 			}
 		} catch(\Exception $e) {
-			file_put_contents(YEWU_FILE, CUR_DATETIME.'-'.$e->getMessage().PHP_EOL, FILE_APPEND);
+			file_put_contents(YEWU_FILE, CUR_DATETIME.'-reuslt:-notify'.$e->getMessage().PHP_EOL, FILE_APPEND);
 			$data =array('code'=>1001,'msg'=>$e->getMessage());
 		}
-		//file_put_contents(YEWU_FILE, CUR_DATETIME.'-'.'异步处理结果:'.json_encode($data).PHP_EOL, FILE_APPEND);
 		return $data;
 	}
 }

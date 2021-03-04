@@ -6,7 +6,7 @@
  * Date:20180509
  */
 
-class ProfilesController extends PcBasicController
+class ProfilesController extends MemberBasicController
 {
     private $m_user;
 	
@@ -31,17 +31,16 @@ class ProfilesController extends PcBasicController
 
 	public function profilesajaxAction()
 	{
+        if ($this->login==FALSE AND !$this->userid) {
+            $data = array('code' => 1000, 'msg' => '请登录');
+			Helper::response($data);
+        }
 		$nickname = $this->getPost('nickname',false);
 		$qq = $this->getPost('qq',false);
 		$tag = $this->getPost('tag',false);
 		$csrf_token = $this->getPost('csrf_token', false);
 		
 		$data = array();
-		
-        if ($this->login==FALSE AND !$this->userid) {
-            $data = array('code' => 1000, 'msg' => '请登录');
-			Helper::response($data);
-        }
 		
 		if($nickname AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {
@@ -77,16 +76,15 @@ class ProfilesController extends PcBasicController
 	
 	public function passwordajaxAction()
 	{
+        if ($this->login==FALSE AND !$this->userid) {
+            $data = array('code' => 1000, 'msg' => '请登录');
+			Helper::response($data);
+        }
 		$password = $this->getPost('password',false);
 		$oldpassword = $this->getPost('oldpassword',false);
 		$csrf_token = $this->getPost('csrf_token', false);
 		
 		$data = array();
-		
-        if ($this->login==FALSE AND !$this->userid) {
-            $data = array('code' => 1000, 'msg' => '请登录');
-			Helper::response($data);
-        }
 		
 		if($password AND $oldpassword AND $csrf_token){
 			if ($this->VerifyCsrfToken($csrf_token)) {

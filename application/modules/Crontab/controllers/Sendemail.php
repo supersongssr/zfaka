@@ -31,11 +31,22 @@ class SendemailController extends BasicController
         $queue = $this->m_email_queue->Where(array('status' => 0,'isdelete'=>0))->Limit(10)->Select();
         if (is_array($queue) AND !empty($queue)) {
 			$emainConfig = $this->m_email->getConfig();
-			$config=array();
-			$config['smtp_host'] = 'ssl://' . $emainConfig['host'];
-			$config['smtp_user'] = $emainConfig['mailaddress'];
-			$config['smtp_pass'] = $emainConfig['mailpassword'];
-			$config['smtp_port'] = $emainConfig['port'];
+			$config = array();
+			if($emainConfig['protocol']=="smtp"){
+				//对smtp进行特别配置
+				if($emainConfig['smtp_crypto']>1){
+					$config['smtp_crypto'] = 'tls';
+				}elseif($emainConfig['smtp_crypto']>0){	
+					$config['smtp_crypto'] = 'ssl';
+				}else{
+					$config['smtp_crypto'] = '';
+				}
+				$config['smtp_host'] = $emainConfig['host'];
+				$config['smtp_user'] = $emainConfig['mailaddress'];
+				$config['smtp_pass'] = $emainConfig['mailpassword'];
+				$config['smtp_port'] = $emainConfig['port'];
+			}
+			
 			$config['sendmail'] = $emainConfig['sendmail'];
 			$config['sendname'] = $emainConfig['sendname'];
 			foreach($queue AS $q){
@@ -73,7 +84,7 @@ class SendemailController extends BasicController
 		}
 		//2.记录发送结果
 		if($data['code']>1){
-			$this->m_email_queue->UpdateByID(array('status'=>-1,'sendresult'=>$data['msg']),$params['id']);
+			$this->m_email_queue->UpdateByID(array('status'=>2,'sendresult'=>$data['msg']),$params['id']);
 		}else{
 			$this->m_email_queue->UpdateByID(array('sendtime'=>time(),'status'=>1,'sendresult'=>$data['msg']),$params['id']);
 		}
